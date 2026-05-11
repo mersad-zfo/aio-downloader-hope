@@ -1,0 +1,61 @@
+name: Bunkr Downloader
+
+on:
+  workflow_dispatch:
+    inputs:
+      bunkr_url:
+        description: 'Bunkr URL (album or single file)'
+        required: true
+        type: string
+
+jobs:
+  download-from-bunkr:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install SimpleBunkrDownloader
+        run: |
+          git clone https://github.com/parasiteoflife/SimpleBunkrDownloader.git
+          cd SimpleBunkrDownloader
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: Create URLs file
+        run: |
+          cd SimpleBunkrDownloader
+          echo "${{ github.event.inputs.bunkr_url }}" > URLs.txt
+
+      - name: Run Bunkr Downloader
+        run: |
+          cd SimpleBunkrDownloader
+          python3 main.py
+
+      - name: Move downloaded files to repo
+        run: |
+          # Create direct folder if it doesn't exist
+          mkdir -p direct/
+          
+          # Move everything from SimpleBunkrDownloader/Downloads to direct/bunkr/
+          if [ -d "SimpleBunkrDownloader/Downloads" ]; then
+            mv SimpleBunkrDownloader/Downloads/* direct/bunkr_download_$(date +'%Y%m%d_%H%M%S')/
+            echo "Files moved successfully"
+          else
+            echo "No downloads folder found - check if the URL worked"
+            exit 1
+          fi
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add direct/
+          git commit -m "Add Bunkr download from ${{ github.event.inputs.bunkr_url }}" || echo "No changes to commit"
+          git push
